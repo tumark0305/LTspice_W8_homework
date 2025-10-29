@@ -1,7 +1,15 @@
-import os
+import os,subprocess
+from ltspice import Ltspice
+from LTtoolbox import calculator
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+DIR = "./Circuit"
+location = f"{DIR}/main.asc"
+CACHE = f"{DIR}/Cache"
+PROGRAM = f"C:/My Programs/XVIIx64/XVIIx64.exe"
+
 class subLTspice:
-    def __init__(self,_location:str,_file_name:str,_data_pack:list[float],_circuit_data):
-        self.location = _location
+    def __init__(self,_file_name:str,_data_pack:list[float],_circuit_data):
         self.file_name = _file_name
         if len(_data_pack) != 3:
             raise ValueError(f'{len(_data_pack) = }')
@@ -9,6 +17,7 @@ class subLTspice:
         self.Cx = _data_pack[1]
         self.Rx = _data_pack[2]
         self.circuit_data = self.__generate(_circuit_data)
+        self.result = []
         return None
     def __generate(self,_circuit_data)->str:
         _parameter_list = [_parameter for _parameter in _circuit_data.split('\n') if ".param" in _parameter]
@@ -25,35 +34,72 @@ class subLTspice:
         _output = "\n".join(_output_list)
         return _output
     def new_file(self):
-        _f = open(f'{self.location}/{self.file_name}',"w" ,encoding="utf-8")
+        _f = open(f'{CACHE}/{self.file_name}.asc',"w" ,encoding="utf-8")
         _f.write(self.circuit_data)
         _f.close()
         return None
     def run(self):
+        #subprocess.run([PROGRAM, "-b", "-Run", "-ascii", f'{CACHE}/{self.file_name}.asc'], check=True)
+        subprocess.run([PROGRAM, "-b", "-Run", f'{CACHE}/{self.file_name}.asc'], check=True)
+        return None
+    def get_result(self):
+        lt = Ltspice(f'{CACHE}/{self.file_name}.raw')
+        lt.parse()
+        x = lt.get_time()
+        Vout = lt.get_data('V(out)')
+        _cal = calculator(x,Vout)
+        if _cal.stop_resonate_time is not None:
+            _cal.FFT()
+            self.result = [_cal.stop_resonate_time , _cal.F0 , _cal.BW]
+        else:
+            self.result = [0.0 , 0.0 , 0.0]
         return None
 
 
 class LTspice:
-    process_area = "./Circuit"
-    location = f"{process_area}/main.asc"
-    cache = f"{process_area}/Cache"
     def __init__(self):
+        os.makedirs(CACHE,exist_ok=True)
         self.__read_file()
         return None
     def __read_file(self)->str:
-        _f = open(self.location,"r" ,encoding="utf-8")
+        _f = open(location,"r" ,encoding="utf-8")
         self.circuit_data = _f.read()
         _f.close()
         return None
-    def single_test(self):
-        os.makedirs(self.cache,exist_ok=True)
-        _circuit = subLTspice(self.cache , "test1.asc",[1e-6,1e-6,1e-6],self.circuit_data)
+    def thread(self,_file_name:str,_Lx=70e-6,_Cx=300e-12,_Rx=1e3):
+        _circuit = subLTspice(_file_name,[_Lx,_Cx,_Rx],self.circuit_data)#LCR
         _circuit.new_file()
-        return None
+        _circuit.run()
+        _circuit.get_result()
+        return _circuit.result
+    def run_multithread(self, tasks: list, max_workers: int = 5):
+        results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_idx = {
+                executor.submit(
+                    self.thread,
+                    task['_file_name'],
+                    task.get('_Lx', 70e-6),
+                    task.get('_Cx', 300e-12),
+                    task.get('_Rx', 1e3)
+                ): idx
+                for idx, task in enumerate(tasks)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    res = future.result()
+                except Exception as e:
+                    print(f"[Thread {idx}] Error:", e)
+                    res = None
+                results.append((idx, res))
+
+        return results
 
 if __name__ == '__main__':
     circuit = LTspice()
     circuit.single_test()
+    circuit.run_multithread()
     pass
 
 
