@@ -47,7 +47,7 @@ class LTspice:
         return None
     def single_test(self):
         os.makedirs(self.cache,exist_ok=True)
-        _circuit = subLTspice(self.cache , "test.asc",[1e-6,1e-6,1e-6],self.circuit_data)
+        _circuit = subLTspice(self.cache , "test1.asc",[1e-6,1e-6,1e-6],self.circuit_data)
         _circuit.new_file()
         return None
 
