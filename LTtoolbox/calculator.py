@@ -20,8 +20,9 @@ class calculator:
                     self.y = _y_array
                     self.resonate_detector()
                     self.fft_result = None
+                    self.stop_resonate_time = 1e-4
                     if self.stop_resonate_time is not None:
-                        self.resonate_only(1e-4)
+                        #self.resonate_only(1e-4)
                         # print(f"{len(self.y) = }")
                         # plt.figure(figsize=(12,4))
                         # plt.plot(self.x, self.y, lw=0.8)
@@ -94,8 +95,8 @@ class calculator:
             if _min_freq < 1e5:
                 _min_freq = 1e5
             _max_freq = _min_freq*1e5
-            if _max_freq > 1e10:
-                _max_freq = 1e10
+            if _max_freq > 1e8:
+                _max_freq = 1e8
             _ctype = torch.complex64
             _x = torch.from_numpy(self.x).to(DEVICE).to(torch.float64)
             _y_c = torch.from_numpy(self.y - self.y.mean()).to(DEVICE).to(_ctype)

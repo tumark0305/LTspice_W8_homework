@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>2367efea-6669-469d-b4b3-fc8b772bc5b7</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>main.py</StartupFile>
+    <StartupFile>LTtoolbox\convert_result.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -23,6 +23,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="LTtoolbox\Calculator.py" />
+    <Compile Include="LTtoolbox\convert_result.py" />
     <Compile Include="LTtoolbox\LTspice.py" />
     <Compile Include="LTtoolbox\__init__.py" />
     <Compile Include="main.py" />

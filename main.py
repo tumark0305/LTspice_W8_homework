@@ -1,8 +1,8 @@
 from LTtoolbox import LTspice
 import time
 
-TASK = [{'file_name': f"case{i}", 'Lx': 70e-6, 'Cx': 10e-12+i*1e-12, 'Rx': 1000}    for i in range(290)]
-TASK1 = [{'file_name': f"case{i}", 'Lx': 70e-6, 'Cx': 300e-12, 'Rx': 1+i}    for i in range(1000)]
+TASK = [{'file_name': f"case{i}", 'Lx': 70e-6, 'Cx': 10e-12+i*10e-12, 'Rx': 0.2}    for i in range(29)]
+TASK1 = [{'file_name': f"case{i}", 'Lx': 70e-6, 'Cx': 300e-12, 'Rx': 0.1+0.1*i}    for i in range(19)]
 
 class Auto_spice:
     def __init__(self,task_list):
@@ -30,13 +30,14 @@ class Auto_spice:
 if __name__ == '__main__':
     _bot = Auto_spice(TASK)
     _bot.run()
-    _bot.save('var_C290')
+    _bot.save('var_C29')
 
     del _bot
     time.sleep(20)
+    print("start R19")
     _bot = Auto_spice(TASK1)
     _bot.run()
-    _bot.save('var_R1000')
+    _bot.save('var_R19')
 
     
     
