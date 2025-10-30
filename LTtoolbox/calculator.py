@@ -2,21 +2,29 @@ import numpy as np
 import torch,threading,time,multiprocessing
 import matplotlib.pyplot as plt
 from scipy.signal import lombscargle
+import threading
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class calculator:
-    _lock = multiprocessing.Lock()
+    _lock = threading.Lock()
+    _task_completed = False
     harmonic_list = [1,2,3,4,5,6,7,8,9,10,11]
     def __init__(self,_time_array,_y_array):
-        _got = calculator._lock.acquire(block=True)
-        self.x = _time_array
-        self.y = _y_array
-        self.resonate_detector()
-        if self.stop_resonate_time is not None:
-            self.resonate_only(1e-3)
-        self.fft_result = None
-        self._lock.release()
+        while True:
+            with self._lock:
+                if not self._task_completed:
+                    self.x = _time_array
+                    self.y = _y_array
+                    self.resonate_detector()
+                    if self.stop_resonate_time is not None:
+                        self.resonate_only(1e-3)
+                    self.fft_result = None
+                    self._task_completed = False
+                    break
+                else:
+                    time.sleep(1)
+                    continue
         return None
     def resonate_detector(self):
         self.stop_resonate_time = None
@@ -85,7 +93,7 @@ class calculator:
             _mag = torch.abs(_Y)
             return _f , _mag
         def lomb_batched_fft_gpu_core():
-            batch_size = int(2.5e4)
+            batch_size = int(1e4)
             _ctype = torch.complex64
             _x = torch.from_numpy(self.x).to(DEVICE).to(torch.float64)
             _y = torch.from_numpy(self.y).to(DEVICE).to(torch.float64)

@@ -1,6 +1,6 @@
 import os,subprocess
 from ltspice import Ltspice
-from LTtoolbox import calculator
+from .Calculator import calculator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 DIR = "./Circuit"
@@ -47,12 +47,13 @@ class subLTspice:
         lt.parse()
         x = lt.get_time()
         Vout = lt.get_data('V(out)')
-        _cal = calculator(x,Vout)
+        _cal = calculator(x,Vout) 
         if _cal.stop_resonate_time is not None:
             _cal.FFT()
             self.result = [_cal.stop_resonate_time , _cal.F0 , _cal.BW]
         else:
             self.result = [0.0 , 0.0 , 0.0]
+        del _cal
         return None
 
 
@@ -78,10 +79,10 @@ class LTspice:
             future_to_idx = {
                 executor.submit(
                     self.thread,
-                    task['_file_name'],
-                    task.get('_Lx', 70e-6),
-                    task.get('_Cx', 300e-12),
-                    task.get('_Rx', 1e3)
+                    task['file_name'],
+                    task.get('Lx', 70e-6),
+                    task.get('Cx', 300e-12),
+                    task.get('Rx', 1e3)
                 ): idx
                 for idx, task in enumerate(tasks)
             }
@@ -93,13 +94,15 @@ class LTspice:
                     print(f"[Thread {idx}] Error:", e)
                     res = None
                 results.append((idx, res))
-
         return results
 
 if __name__ == '__main__':
+    task_list = [
+    {'file_name': f"case{i}", 'Lx': 50e-6 + i*5e-6, 'Cx': 300e-12, 'Rx': 1e3}
+    for i in range(10)
+]
     circuit = LTspice()
-    circuit.single_test()
-    circuit.run_multithread()
+    result = circuit.run_multithread(task_list)
     pass
 
 

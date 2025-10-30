@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>2367efea-6669-469d-b4b3-fc8b772bc5b7</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>LTtoolbox\LTspice.py</StartupFile>
+    <StartupFile>main.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -22,7 +22,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="LTtoolbox\calculator.py" />
+    <Compile Include="LTtoolbox\Calculator.py" />
     <Compile Include="LTtoolbox\LTspice.py" />
     <Compile Include="LTtoolbox\__init__.py" />
     <Compile Include="main.py" />

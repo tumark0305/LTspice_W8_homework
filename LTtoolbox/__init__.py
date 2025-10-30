@@ -1,5 +1,6 @@
+from .Calculator import calculator
 from .LTspice import LTspice
-from .calculator import calculator
+
 
 
 __all__ = [
