@@ -10,6 +10,8 @@ class calculator:
     _lock = threading.Lock()
     _task_completed = False
     harmonic_list = [1,2,3,4,5,6,7,8,9,10,11]
+    unreach_time = 0.05
+    Vpp_min = 0.01
     def __init__(self,_time_array,_y_array):
         while True:
             with self._lock:
@@ -17,9 +19,21 @@ class calculator:
                     self.x = _time_array
                     self.y = _y_array
                     self.resonate_detector()
-                    if self.stop_resonate_time is not None:
-                        self.resonate_only(1e-3)
                     self.fft_result = None
+                    if self.stop_resonate_time is not None:
+                        self.resonate_only(1e-4)
+                        # print(f"{len(self.y) = }")
+                        # plt.figure(figsize=(12,4))
+                        # plt.plot(self.x, self.y, lw=0.8)
+                        # plt.xlabel("Time [s]")
+                        # plt.ylabel("Amplitude [V]")
+                        # plt.title("Time Domain Waveform")
+                        # plt.grid(True, ls='--', alpha=0.7)
+                        # plt.tight_layout()
+
+                        # plt.savefig("./waveform_time.png", dpi=200)
+                        # plt.close()
+                        self.FFT()
                     self._task_completed = False
                     break
                 else:
@@ -37,18 +51,33 @@ class calculator:
             return None
         A3 = _z[peak_idx[2]].item()
         thr = (A3 * 0.01)
+        i=0
+        _Vpp_list = []
         for i in range(2, peak_idx.numel()-1):
             a1 = _z[peak_idx[i]].item()
             a2 = _z[peak_idx[i+1]].item()
-            if a1 >= thr and a2 < thr:
-                t1 = _x[peak_idx[i]].item()
-                t2 = _x[peak_idx[i+1]].item()
-                frac = (thr - a1) / (a2 - a1 + 1e-30)
-                t_stop = t1 + frac * (t2 - t1)
+            _Vpp_list.append((a1-a2,_x[peak_idx[i]].item()))
+            
+            # if a1 >= thr and a2 < thr:
+            #     t1 = _x[peak_idx[i]].item()
+            #     t2 = _x[peak_idx[i+1]].item()
+            #     frac = (thr - a1) / (a2 - a1 + 1e-30)
+            #     t_stop = t1 + frac * (t2 - t1)
+            #     self.stop_resonate_time = float(t_stop)
+            #     break
+        for _Vpp in _Vpp_list:
+            if abs(_Vpp[0]) < thr:
+                t_stop = _Vpp[1]
                 self.stop_resonate_time = float(t_stop)
                 break
-        if i >=peak_idx.numel()-2:
-            self.stop_resonate_time = float(peak_idx.numel())-2
+        if self.stop_resonate_time is None and peak_idx.numel() < 500:
+            t_stop = float(_x[peak_idx[-1]].item())
+            self.stop_resonate_time = float(t_stop)
+
+        if self.stop_resonate_time is None:
+            self.stop_resonate_time = self.unreach_time
+        if self.stop_resonate_time > self.unreach_time:
+            self.stop_resonate_time = self.unreach_time
         return None
     def resonate_only(self,_max_duration:float):
         _new_end_time = self.stop_resonate_time
@@ -59,48 +88,26 @@ class calculator:
         self.y = self.y[_mask]
         return None
     def FFT(self):
-        def fft_core():
-            _x = torch.from_numpy(self.x).to(DEVICE)
-            _y = torch.from_numpy(self.y).to(DEVICE)
-            dt = (_x[1] - _x[0])
-            fs = 1.0 / dt
-            N  = _y.numel()
-            v0   = _y - _y.mean()
-            win  = torch.hann_window(N, periodic=True, device=DEVICE, dtype=v0.dtype)
-            vwin = v0 * win
-            Vf   = torch.fft.rfft(vwin)                 # complex tensor on GPU
-            freq = torch.fft.rfftfreq(N, d=float(dt)).to(DEVICE)  # Hz
-            amp_scale = 2.0 / (win.sum() / N)
-            #mag_db = 20.0 * torch.log10(torch.clamp(mag, min=1e-20))
-            mag = torch.abs(Vf) * amp_scale / N
-            return freq , mag
-        def lomb_fft_core():
-            t = self.x - self.x[0]    
-            y = self.y - np.mean(self.y) 
-            f = np.linspace(1e3, 1e6, int(1e5)) 
-
-            angular_freq = 2 * np.pi * f
-            pgram = lombscargle(t, y, angular_freq)
-            amp = np.sqrt(4*pgram / len(t))
-            return torch.from_numpy(f) , torch.from_numpy(amp)
-        def lomb_fft_gpu_core():
-            _x = torch.from_numpy(self.x).to(DEVICE).to(torch.float64)
-            _y = torch.from_numpy(self.y).to(DEVICE).to(torch.complex64)
-            _f = torch.linspace(1e3, 1e7, int(1e5), device=DEVICE, dtype=torch.float64)
-            _w = 2 * torch.pi * _f[:, None] *_x[None, :]  # shape (M, N)
-            _exp_term = torch.exp((-1j * _w).to(torch.complex64)) 
-            _Y = torch.matmul(_exp_term, _y) / _x.numel()
-            _mag = torch.abs(_Y)
-            return _f , _mag
         def lomb_batched_fft_gpu_core():
-            batch_size = int(1e4)
+            
+            _min_freq = 0.1/self.stop_resonate_time
+            if _min_freq < 1e5:
+                _min_freq = 1e5
+            _max_freq = _min_freq*1e5
+            if _max_freq > 1e10:
+                _max_freq = 1e10
             _ctype = torch.complex64
             _x = torch.from_numpy(self.x).to(DEVICE).to(torch.float64)
-            _y = torch.from_numpy(self.y).to(DEVICE).to(torch.float64)
-            _y_c = torch.from_numpy(self.y).to(DEVICE).to(_ctype)
-            _f = torch.linspace(1e5, 1e10, int(1e7), device=DEVICE, dtype=torch.float64)
+            _y_c = torch.from_numpy(self.y - self.y.mean()).to(DEVICE).to(_ctype)
+            _win = torch.hann_window(_x.numel(), periodic=True, device=DEVICE)
+            _f = torch.linspace(float(_min_freq), float(_max_freq), int(1e7), device=DEVICE, dtype=torch.float64)
             _N = _x.numel()
             _Y = torch.zeros((_f.numel(),), device=DEVICE, dtype=_ctype)
+            bytes_per_complex = 8
+            target_bytes = 1024 * 1024**2
+            est_chunk = max(1024, int(target_bytes / (_N * bytes_per_complex + 1)))
+            batch_size = min(est_chunk, _f.numel())
+            #batch_size = int(0.5e4)
             for i in range(0, _f.numel(), batch_size):
                 f_chunk = _f[i:i+batch_size]                        # (C,)
                 w = 2.0 * torch.pi * f_chunk[:, None] * _x[None, :]      # (C,N) float64
@@ -108,12 +115,30 @@ class calculator:
                 _Y[i:i+batch_size] = torch.matmul(exp_term, _y_c) / _N            # (C,)
                 del w, exp_term
             _mag = torch.abs(_Y)
+            _mag = _mag * 2.0 / (_win.sum()/ _N) / _N
+            del _x,_y_c,_win,_Y
+
+            # f_np = _f.detach().cpu().numpy()
+            # mag_np = _mag.detach().cpu().numpy()
+
+            # plt.figure(figsize=(16,3))
+            # plt.semilogx(f_np, mag_np) 
+
+            # plt.xlabel("Frequency [Hz]")
+            # plt.ylabel("Magnitude")
+            # plt.title("Spectrum (Log–Log Scale)")
+            # plt.grid(True, which="both", ls="--", alpha=0.7)
+
+            # plt.tight_layout()
+            # plt.savefig("./spectrum.png", dpi=200)
+            # plt.close()
             return _f , _mag
         
         _freq_array , _mag_list = lomb_batched_fft_gpu_core()
-
         idx1 = 1 if _freq_array.numel() > 1 else 0
+
         main_idx = torch.argmax(_mag_list[idx1:]) + idx1
+
         f_main = _freq_array[main_idx]
         a_main = _mag_list[main_idx]
         self.main_harmonic = []
@@ -153,7 +178,6 @@ class calculator:
         self.BW = float(_BW)
         self.Q = float(_Q)
         self.fft_result = _mag_list.cpu().numpy()
-        
         return None
     def test_prt(self,_data):
         plt.figure(figsize=(8,4))

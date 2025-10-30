@@ -49,7 +49,6 @@ class subLTspice:
         Vout = lt.get_data('V(out)')
         _cal = calculator(x,Vout) 
         if _cal.stop_resonate_time is not None:
-            _cal.FFT()
             self.result = [_cal.stop_resonate_time , _cal.F0 , _cal.BW]
         else:
             self.result = [0.0 , 0.0 , 0.0]
@@ -72,7 +71,10 @@ class LTspice:
         _circuit.new_file()
         _circuit.run()
         _circuit.get_result()
-        return _circuit.result
+        _output = _circuit.result
+        print(_output)
+        del _circuit.result
+        return _output
     def run_multithread(self, tasks: list, max_workers: int = 5):
         results = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
